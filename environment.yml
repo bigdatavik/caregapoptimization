@@ -1,0 +1,35 @@
+# Care-Gap Optimization — Serverless Environment Specification
+# =========================================================
+# This YAML defines a reusable serverless environment for all
+# project notebooks and job tasks.
+#
+# HOW TO USE:
+#   1. Open any project notebook.
+#   2. Click the Environment side pane (right sidebar).
+#   3. Under "Base environment", select "Custom".
+#   4. Browse to this file:
+#      <bundle root>/files/environment.yml
+#   5. Click "Apply" — dependencies install automatically.
+#
+# Dependencies are cached by Databricks serverless, so subsequent
+# opens of notebooks using this environment are fast.
+#
+# ARCHITECTURE NOTE:
+#   Serverless compute may run on aarch64 or x86_64.
+#   highspy and lightgbm ship pre-built wheels for both.
+#   If a build fails, pin to a pure-Python fallback or add
+#   platform_machine markers.
+#
+# SERVING NOTE:
+#   Model Serving uses a different image. Packages listed here
+#   must ALSO be declared in the MLflow PythonModel's conda.yaml
+#   or pip_requirements for serving to work.
+
+environment_version: '6'
+dependencies:
+  # Optimization modeling framework (REQ-06)
+  - pyomo==6.10.1
+  # HiGHS open-source MIP solver, accessed via highspy (REQ-06)
+  - highspy==1.15.1
+  # Tree-based baseline model alternative (REQ-09)
+  - lightgbm==4.7.0

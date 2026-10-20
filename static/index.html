@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Care-Gap Optimizer</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f5f7fa;color:#1b3139}
+.sidebar{width:220px;background:#1b3139;min-height:100vh;color:#fff;padding:16px 0;position:fixed;top:0;left:0;z-index:10}
+.sidebar h1{font-size:15px;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.15);margin-bottom:8px}
+.nav-item{display:block;padding:10px 16px;color:rgba(255,255,255,.65);cursor:pointer;font-size:13px;border-left:3px solid transparent;text-decoration:none}
+.nav-item:hover,.nav-item.active{color:#fff;background:rgba(255,255,255,.08);border-left-color:#00a972}
+.main{margin-left:220px;padding:24px}
+.card{background:#fff;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.08);padding:20px;margin-bottom:16px}
+.grid{display:grid;gap:16px}.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:1fr 1fr 1fr}.g4{grid-template-columns:1fr 1fr 1fr 1fr}.g5{grid-template-columns:repeat(5,1fr)}
+.kpi{text-align:center;padding:12px}.kpi .v{font-size:24px;font-weight:700}.kpi .l{font-size:11px;color:#666;margin-top:2px}
+.btn{padding:8px 20px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer}
+.btn-p{background:#00a972;color:#fff}.btn-p:hover{background:#008a5e}.btn-s{background:#e0e0e0;color:#333}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+select,input[type=number],input[type=text]{padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:13px;width:100%}
+label{display:block;font-size:12px;font-weight:600;margin-bottom:4px;color:#555}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{background:#f0f2f5;padding:8px;text-align:left;font-weight:600;border-bottom:2px solid #ddd}
+td{padding:7px 8px;border-bottom:1px solid #eee}
+tr:hover{background:#f8fafb}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600}
+.bg{background:#d3f9d8;color:#087f23}.br{background:#ffd8d8;color:#c62828}.by{background:#fff3cd;color:#856404}
+h2{font-size:18px;margin-bottom:16px}h3{font-size:14px;margin-bottom:12px}
+.bar-wrap{display:flex;align-items:center;gap:8px;margin:4px 0}
+.bar{height:20px;border-radius:3px;min-width:2px;transition:width .3s}
+.bar-label{font-size:11px;min-width:40px;text-align:right}
+.spin{display:inline-block;width:16px;height:16px;border:2px solid #ddd;border-top-color:#00a972;border-radius:50%;animation:sp .5s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.warn-box{background:#fff3cd;border:1px solid #ffe69c;border-radius:8px;padding:14px;font-size:13px}
+.info-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:13px}
+.info-grid strong{color:#1b3139}
+</style>
+</head>
+<body>
+<div class="sidebar">
+  <h1>&#10024; Care-Gap Optimizer</h1>
+  <div id="nav"></div>
+</div>
+<div class="main" id="app"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const api = async (p, o) => { const r = await fetch('/api/'+p, o); if(!r.ok) throw new Error(await r.text()); return r.json(); };
+const post = (p, b) => api(p, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(b)});
+const h = (tag, attrs, ...ch) => { const el=document.createElement(tag); if(attrs) Object.entries(attrs).forEach(([k,v])=>{ if(k==='on'&&typeof v==='object') Object.entries(v).forEach(([e,fn])=>el.addEventListener(e,fn)); else if(k==='html') el.innerHTML=v; else if(k==='style'&&typeof v==='object') Object.assign(el.style,v); else el.setAttribute(k,v); }); ch.flat(9).forEach(c=>{ if(c==null)return; el.appendChild(typeof c==='string'?document.createTextNode(c):c); }); return el; };
+
+const PAGES = [
+  {id:'optimize',label:'Configure & Optimize'},
+  {id:'scenarios',label:'Scenario Lab'},
+  {id:'members',label:'Member Explorer'},
+  {id:'quality',label:'Data Quality'},
+  {id:'feedback',label:'Feedback Tracking'},
+  {id:'about',label:'About & Readiness'},
+];
+
+let currentPage = 'optimize';
+
+function renderNav() {
+  const nav = $('#nav');
+  nav.innerHTML = '';
+  PAGES.forEach(p => {
+    const a = h('div',{class:'nav-item'+(currentPage===p.id?' active':''),on:{click:()=>{currentPage=p.id;renderNav();renderPage();}}}, p.label);
+    nav.appendChild(a);
+  });
+}
+
+function renderPage() {
+  const app = $('#app');
+  app.innerHTML = '<div class="card"><span class="spin"></span> Loading...</div>';
+  const fn = {optimize:pageOptimize,scenarios:pageScenarios,members:pageMembers,quality:pageQuality,feedback:pageFeedback,about:pageAbout};
+  fn[currentPage](app);
+}
+
+// ── Page 1: Configure & Optimize ──
+async function pageOptimize(root) {
+  root.innerHTML = '';
+  root.appendChild(h('h2',{},'Configure & Optimize'));
+
+  const card = h('div',{class:'card'});
+  const grid = h('div',{class:'grid g4',style:{marginBottom:'12px'}});
+
+  const selPreset = h('select',{id:'preset'},
+    h('option',{value:'balanced'},'Balanced'),
+    h('option',{value:'early_year_aggressive'},'Early Year Aggressive'),
+    h('option',{value:'late_year_conservative'},'Late Year Conservative'));
+  const inpBudget = h('input',{type:'number',id:'budget',value:'13200'});
+  const selUnc = h('select',{id:'unc'}, h('option',{value:'mean'},'Mean'), h('option',{value:'conservative'},'Conservative'));
+
+  grid.append(
+    h('div',{}, h('label',{},'Policy Preset'), selPreset),
+    h('div',{}, h('label',{},'Budget ($)'), inpBudget),
+    h('div',{}, h('label',{},'Uncertainty'), selUnc),
+    h('div',{style:{display:'flex',alignItems:'flex-end'}}, h('button',{class:'btn btn-p',style:{width:'100%'},on:{click:runOpt}},'Run Optimizer'))
+  );
+  card.appendChild(grid);
+
+  const wGrid = h('div',{class:'grid g4'});
+  ['HBA1C','BPC','COL','MED_ADH'].forEach(m => {
+    const inp = h('input',{type:'number',step:'0.1',min:'0',max:'5',value:'1',id:'w_'+m});
+    wGrid.appendChild(h('div',{}, h('label',{},m+' weight'), inp));
+  });
+  card.appendChild(wGrid);
+  root.appendChild(card);
+
+  const resDiv = h('div',{id:'results'});
+  root.appendChild(resDiv);
+
+  async function runOpt() {
+    const rd = $('#results');
+    rd.innerHTML = '<div class="card"><span class="spin"></span> Running optimizer (may take ~15s)...</div>';
+    try {
+      const mw = {}; ['HBA1C','BPC','COL','MED_ADH'].forEach(m => mw[m] = +$('#w_'+m).value);
+      const r = await post('optimize', {
+        preset: $('#preset').value, total_budget: +$('#budget').value,
+        uncertainty_mode: $('#unc').value, measure_weights: mw
+      });
+      rd.innerHTML = '';
+      // KPIs
+      const kc = h('div',{class:'card'});
+      const kg = h('div',{class:'grid g5'});
+      const badge = (v,ok) => `<span class="badge ${ok?'bg':'br'}">${v}</span>`;
+      kg.append(
+        h('div',{class:'kpi',html:`<div class="v">${badge(r.solver_status,r.solver_status==='optimal')}</div><div class="l">Status</div>`}),
+        h('div',{class:'kpi'},h('div',{class:'v'},''+r.objective_value),h('div',{class:'l'},'Objective')),
+        h('div',{class:'kpi'},h('div',{class:'v'},'$'+r.total_cost.toLocaleString()),h('div',{class:'l'},'Cost / $'+r.budget.toLocaleString())),
+        h('div',{class:'kpi'},h('div',{class:'v'},r.candidates_selected+'/'+r.candidates_total),h('div',{class:'l'},'Selected')),
+        h('div',{class:'kpi'},h('div',{class:'v'},''+r.violations),h('div',{class:'l'},'Violations')),
+      );
+      kc.appendChild(kg); rd.appendChild(kc);
+
+      // Bar charts
+      const charts = h('div',{class:'grid g2'});
+      if(r.measure_summary.length) {
+        const maxC = Math.max(...r.measure_summary.map(m=>m.count));
+        const mc = h('div',{class:'card'}, h('h3',{},'By Measure'));
+        r.measure_summary.forEach(m => {
+          mc.appendChild(h('div',{class:'bar-wrap'},
+            h('div',{style:{width:'70px',fontSize:'12px',fontWeight:600}},m.measure_code),
+            h('div',{class:'bar',style:{width:Math.max(5,m.count/maxC*100)+'%',background:'#00a972'}}),
+            h('div',{class:'bar-label'},m.count+' sel')
+          ));
+        });
+        charts.appendChild(mc);
+      }
+      if(r.intervention_summary.length) {
+        const maxI = Math.max(...r.intervention_summary.map(m=>m.count));
+        const ic = h('div',{class:'card'}, h('h3',{},'By Intervention'));
+        const colors = ['#00a972','#ff6f00','#1b3139','#e03131'];
+        r.intervention_summary.forEach((m,i) => {
+          ic.appendChild(h('div',{class:'bar-wrap'},
+            h('div',{style:{width:'120px',fontSize:'12px',fontWeight:600}},m.intervention_type),
+            h('div',{class:'bar',style:{width:Math.max(5,m.count/maxI*100)+'%',background:colors[i%4]}}),
+            h('div',{class:'bar-label'},m.count+' ($'+Math.round(m.total_cost).toLocaleString()+')')
+          ));
+        });
+        charts.appendChild(ic);
+      }
+      rd.appendChild(charts);
+
+      // Table
+      if(r.selected.length) {
+        const tc = h('div',{class:'card'}, h('h3',{},'Selected Interventions (top 50)'));
+        const tbl = h('table',{},
+          h('thead',{}, h('tr',{}, ['Candidate','Member','Measure','Intervention','Uplift','Cost'].map(c=>h('th',{},c)))),
+          h('tbody',{}, r.selected.slice(0,50).map(s=>
+            h('tr',{}, h('td',{},s.candidate_id),h('td',{},s.member_id),h('td',{},s.measure_code),
+              h('td',{},s.intervention_type),h('td',{},(s.incremental_uplift||0).toFixed(3)),h('td',{},'$'+s.unit_cost))
+          ))
+        );
+        const wrap = h('div',{style:{maxHeight:'280px',overflow:'auto'}}); wrap.appendChild(tbl);
+        tc.appendChild(wrap); rd.appendChild(tc);
+      }
+    } catch(e) { rd.innerHTML = '<div class="card" style="color:red">Error: '+e.message+'</div>'; }
+  }
+}
+
+// ── Page 2: Scenario Lab ──
+async function pageScenarios(root) {
+  root.innerHTML = '';
+  root.appendChild(h('h2',{},'Scenario Lab'));
+  const card = h('div',{class:'card'});
+  const presets = ['balanced','early_year_aggressive','late_year_conservative'];
+  const checks = {};
+  const cg = h('div',{style:{display:'flex',gap:'16px',alignItems:'flex-end',flexWrap:'wrap'}});
+  presets.forEach(p => {
+    const cb = h('input',{type:'checkbox',checked:'true'}); checks[p] = cb;
+    cg.appendChild(h('label',{style:{display:'flex',gap:'4px',alignItems:'center',fontSize:'13px'}}, cb, p.replace(/_/g,' ')));
+  });
+  const cbInput = h('input',{type:'number',placeholder:'e.g. 5000',style:{width:'110px'}});
+  cg.appendChild(h('div',{}, h('label',{},'Custom budget'), cbInput));
+  cg.appendChild(h('button',{class:'btn btn-p',on:{click:run}},'Compare'));
+  card.appendChild(cg); root.appendChild(card);
+  const rd = h('div',{id:'scen-results'}); root.appendChild(rd);
+
+  async function run() {
+    rd.innerHTML = '<div class="card"><span class="spin"></span> Running scenarios...</div>';
+    try {
+      const scenarios = presets.filter(p=>checks[p].checked).map(p=>({preset:p}));
+      if(cbInput.value) scenarios.push({preset:'balanced',overrides:{total_budget:+cbInput.value,scenario_name:'custom_budget'}});
+      const r = await post('scenarios/compare',{scenarios});
+      rd.innerHTML = '';
+      const tc = h('div',{class:'card'});
+      const tbl = h('table',{},
+        h('thead',{},h('tr',{},['Scenario','Status','Objective','Cost','Budget','Selected','Total'].map(c=>h('th',{},c)))),
+        h('tbody',{},r.scenarios.map(s=>h('tr',{},
+          h('td',{style:{fontWeight:600}},s.scenario_name||s.preset),
+          h('td',{html:`<span class="badge ${s.solver_status==='optimal'?'bg':'br'}">${s.solver_status}</span>`}),
+          h('td',{},''+s.objective_value),h('td',{},'$'+s.total_cost.toLocaleString()),
+          h('td',{},'$'+s.budget.toLocaleString()),h('td',{},''+s.candidates_selected),h('td',{},''+s.candidates_total)
+        )))
+      );
+      tc.appendChild(tbl);
+      // Bar comparison
+      if(r.scenarios.length) {
+        const maxO = Math.max(...r.scenarios.map(s=>s.objective_value));
+        const colors = ['#00a972','#ff6f00','#1b3139','#e03131'];
+        const bc = h('div',{style:{marginTop:'16px'}}); bc.appendChild(h('h3',{},'Objective Comparison'));
+        r.scenarios.forEach((s,i) => {
+          bc.appendChild(h('div',{class:'bar-wrap'},
+            h('div',{style:{width:'160px',fontSize:'12px',fontWeight:600}},s.scenario_name||s.preset),
+            h('div',{class:'bar',style:{width:Math.max(5,s.objective_value/maxO*100)+'%',background:colors[i%4]}}),
+            h('div',{class:'bar-label'},''+s.objective_value)
+          ));
+        });
+        tc.appendChild(bc);
+      }
+      rd.appendChild(tc);
+    } catch(e) { rd.innerHTML='<div class="card" style="color:red">'+e.message+'</div>'; }
+  }
+}
+
+// ── Page 3: Member Explorer ──
+async function pageMembers(root) {
+  root.innerHTML = '';
+  root.appendChild(h('h2',{},'Member Explorer'));
+  const card = h('div',{class:'card'});
+  const inp = h('input',{type:'text',placeholder:'Search member ID...',style:{flex:1}});
+  const sg = h('div',{style:{display:'flex',gap:'8px',marginBottom:'12px'}});
+  sg.append(inp, h('button',{class:'btn btn-p',on:{click:()=>load(inp.value)}},'Search'));
+  card.appendChild(sg);
+  const tWrap = h('div',{id:'mtable'}); card.appendChild(tWrap);
+  root.appendChild(card);
+  const detDiv = h('div',{id:'mdetail'}); root.appendChild(detDiv);
+  load('');
+
+  async function load(q) {
+    tWrap.innerHTML = '<span class="spin"></span>';
+    const r = await api('members?search='+encodeURIComponent(q)+'&limit=30');
+    tWrap.innerHTML = '<p style="font-size:12px;color:#666;margin-bottom:8px">'+r.total+' members</p>';
+    const tbl = h('table',{},
+      h('thead',{},h('tr',{},['ID','Contract','Age','Gender','RAF','Chronic','Region',''].map(c=>h('th',{},c)))),
+      h('tbody',{},r.members.map(m=>h('tr',{},
+        h('td',{},m.member_id),h('td',{},m.contract_id),h('td',{},''+m.age),h('td',{},m.gender),
+        h('td',{},(m.raf_score||0).toFixed(2)),h('td',{},''+m.chronic_condition_count),h('td',{},m.region),
+        h('td',{},h('button',{class:'btn btn-s',style:{padding:'3px 8px',fontSize:'11px'},on:{click:()=>detail(m.member_id)}},'View'))
+      )))
+    );
+    const w = h('div',{style:{maxHeight:'260px',overflow:'auto'}}); w.appendChild(tbl);
+    tWrap.appendChild(w);
+  }
+
+  async function detail(mid) {
+    detDiv.innerHTML = '<div class="card"><span class="spin"></span></div>';
+    const r = await api('members/'+mid);
+    const m = r.member;
+    detDiv.innerHTML = '';
+    const dc = h('div',{class:'card'});
+    dc.appendChild(h('h3',{},'Member '+m.member_id));
+    const kg = h('div',{class:'grid g4',style:{marginBottom:'12px'}});
+    kg.append(
+      h('div',{class:'kpi'},h('div',{class:'v'},''+m.age),h('div',{class:'l'},'Age')),
+      h('div',{class:'kpi'},h('div',{class:'v'},(m.raf_score||0).toFixed(2)),h('div',{class:'l'},'RAF Score')),
+      h('div',{class:'kpi'},h('div',{class:'v'},''+m.chronic_condition_count),h('div',{class:'l'},'Chronic')),
+      h('div',{class:'kpi'},h('div',{class:'v'},''+m.prior_year_closures),h('div',{class:'l'},'Prior Closures')),
+    );
+    dc.appendChild(kg);
+    dc.appendChild(h('h3',{},'Care Gaps ('+r.gaps.length+')'));
+    dc.appendChild(h('table',{},
+      h('thead',{},h('tr',{},['Measure','Status','Eligible'].map(c=>h('th',{},c)))),
+      h('tbody',{},r.gaps.map(g=>h('tr',{},
+        h('td',{},g.measure_code),
+        h('td',{html:`<span class="badge ${g.gap_status==='open'?'by':'bg'}">${g.gap_status}</span>`}),
+        h('td',{},g.eligible?'Yes':'No')
+      )))
+    ));
+    detDiv.appendChild(dc);
+  }
+}
+
+// ── Page 4: Data Quality ──
+async function pageQuality(root) {
+  root.innerHTML = '';
+  root.appendChild(h('h2',{},'Data Quality'));
+  const card = h('div',{class:'card'});
+  card.appendChild(h('button',{class:'btn btn-p',on:{click:run}},'Run Quality Checks'));
+  root.appendChild(card);
+  const rd = h('div',{id:'qresults'}); root.appendChild(rd);
+
+  async function run() {
+    rd.innerHTML = '<div class="card"><span class="spin"></span> Running 6 checks...</div>';
+    try {
+      const r = await api('data-quality');
+      rd.innerHTML = '';
+      const kc = h('div',{class:'card'});
+      const kg = h('div',{class:'grid g3'});
+      kg.append(
+        h('div',{class:'kpi',html:`<div class="v"><span class="badge ${r.passed?'bg':'br'}">${r.passed?'ALL PASSED':'ISSUES'}</span></div><div class="l">Overall</div>`}),
+        h('div',{class:'kpi'},h('div',{class:'v'},r.member_count.toLocaleString()),h('div',{class:'l'},'Members')),
+        h('div',{class:'kpi'},h('div',{class:'v'},r.gap_count.toLocaleString()),h('div',{class:'l'},'Gaps')),
+      );
+      kc.appendChild(kg); rd.appendChild(kc);
+      const tc = h('div',{class:'card'},h('h3',{},'Checks'));
+      tc.appendChild(h('table',{},
+        h('thead',{},h('tr',{},['Check','Status','Detail'].map(c=>h('th',{},c)))),
+        h('tbody',{},r.checks.map(c=>h('tr',{},
+          h('td',{},c.check),
+          h('td',{html:`<span class="badge ${c.passed?'bg':'br'}">${c.passed?'PASS':'FAIL'}</span>`}),
+          h('td',{style:{fontSize:'12px',color:'#666'}},c.detail)
+        )))
+      ));
+      rd.appendChild(tc);
+    } catch(e) { rd.innerHTML='<div class="card" style="color:red">'+e.message+'</div>'; }
+  }
+}
+
+// ── Page 5: Feedback ──
+async function pageFeedback(root) {
+  root.innerHTML = '';
+  root.appendChild(h('h2',{},'Feedback Tracking'));
+  const card = h('div',{class:'card'},h('h3',{},'Submit Feedback'));
+  const fields = {recommendation_id:'',candidate_id:'',member_id:'',approved_by:'',notes:''};
+  const inputs = {};
+  const fg = h('div',{class:'grid g3',style:{marginBottom:'8px'}});
+  ['recommendation_id','candidate_id','member_id'].forEach(f => {
+    const inp = h('input',{type:'text',placeholder:f}); inputs[f] = inp;
+    fg.appendChild(h('div',{},h('label',{},f),inp));
+  });
+  const selM = h('select',{}, ['HBA1C','BPC','COL','MED_ADH'].map(m=>h('option',{value:m},m))); inputs.measure_code=selM;
+  const selI = h('select',{}, ['phone_outreach','mail_reminder','nurse_visit','pharmacy_consult'].map(m=>h('option',{value:m},m))); inputs.intervention=selI;
+  const selS = h('select',{}, ['approved','rejected','deferred','escalated'].map(s=>h('option',{value:s},s))); inputs.status=selS;
+  const inpBy = h('input',{type:'text',placeholder:'name'}); inputs.by=inpBy;
+  const inpN = h('input',{type:'text',placeholder:'notes'}); inputs.notes=inpN;
+  const fg2 = h('div',{class:'grid g3',style:{marginBottom:'8px'}});
+  fg2.append(h('div',{},h('label',{},'Measure'),selM),h('div',{},h('label',{},'Intervention'),selI),h('div',{},h('label',{},'Status'),selS));
+  const fg3 = h('div',{class:'grid g3',style:{marginBottom:'12px'}});
+  fg3.append(h('div',{},h('label',{},'Approved by'),inpBy),h('div',{class:'col-span-2'},h('label',{},'Notes'),inpN));
+  card.append(fg,fg2,fg3,h('button',{class:'btn btn-p',on:{click:submit}},'Submit'));
+  root.appendChild(card);
+  const hDiv = h('div',{id:'fb-history'}); root.appendChild(hDiv); loadFB();
+
+  async function submit() {
+    await post('feedback',{recommendation_id:inputs.recommendation_id.value,candidate_id:inputs.candidate_id.value,
+      member_id:inputs.member_id.value,measure_code:selM.value,recommended_intervention:selI.value,
+      approval_status:selS.value,approved_by:inpBy.value,notes:inpN.value});
+    ['recommendation_id','candidate_id','member_id'].forEach(f=>inputs[f].value='');
+    inpN.value=''; loadFB();
+  }
+  async function loadFB() {
+    const items = await api('feedback');
+    if(!items.length){hDiv.innerHTML='';return;}
+    const tc = h('div',{class:'card'},h('h3',{},'Feedback History ('+items.length+')'));
+    tc.appendChild(h('table',{},
+      h('thead',{},h('tr',{},['#','Rec ID','Member','Measure','Intervention','Status','By'].map(c=>h('th',{},c)))),
+      h('tbody',{},items.map(f=>h('tr',{},
+        h('td',{},''+f.id),h('td',{},f.recommendation_id),h('td',{},f.member_id),h('td',{},f.measure_code),
+        h('td',{},f.recommended_intervention),
+        h('td',{html:`<span class="badge ${f.approval_status==='approved'?'bg':f.approval_status==='rejected'?'br':'by'}">${f.approval_status}</span>`}),
+        h('td',{},f.approved_by)
+      )))
+    ));
+    hDiv.innerHTML=''; hDiv.appendChild(tc);
+  }
+}
+
+// ── Page 6: About ──
+async function pageAbout(root) {
+  root.innerHTML='<div class="card"><span class="spin"></span></div>';
+  try {
+    const m = await api('project-metadata');
+    root.innerHTML = '';
+    root.appendChild(h('h2',{},'About & Readiness'));
+    const ic = h('div',{class:'card'});
+    ic.appendChild(h('h3',{style:{fontSize:'16px',marginBottom:'8px'}},m.project_name));
+    ic.appendChild(h('p',{style:{fontSize:'13px',color:'#666',marginBottom:'12px'}},'Care-gap recommendation and optimization for Medicare Advantage using ML baseline prediction + Pyomo/HiGHS mathematical optimization.'));
+    const ig = h('div',{class:'info-grid'});
+    ig.append(
+      h('div',{},h('strong',{},'Catalog: '),m.uc_catalog), h('div',{},h('strong',{},'Schema: '),m.uc_schema),
+      h('div',{},h('strong',{},'Model: '),m.uc_model+' v'+m.model_version),
+      h('div',{},h('strong',{},'Measures: '),m.measures.join(', ')),
+      h('div',{},h('strong',{},'Interventions: '),m.interventions.join(', ')),
+      h('div',{},h('strong',{},'Tests: '),m.test_result),
+    );
+    ic.appendChild(ig); root.appendChild(ic);
+
+    const rc = h('div',{class:'card'},h('h3',{},'Readiness Matrix'));
+    rc.appendChild(h('table',{},
+      h('thead',{},h('tr',{},h('th',{},'Layer'),h('th',{},'Status'))),
+      h('tbody',{},Object.entries(m.readiness).map(([k,v])=>h('tr',{},
+        h('td',{},k),h('td',{html:`<span class="badge ${v?'bg':'br'}">${v?'Ready':'Not Ready'}</span>`})
+      )))
+    ));
+    root.appendChild(rc);
+
+    const ac = h('div',{class:'card'},h('h3',{},'Architecture'));
+    ac.appendChild(h('pre',{style:{fontSize:'11px',background:'#f0f2f5',padding:'12px',borderRadius:'6px',whiteSpace:'pre-wrap'}},
+      'Data (UC Tables) → Baseline Prediction (LR/LightGBM)\n    → Intervention Evidence (effects table)\n    → Policy Config (presets + overrides)\n    → Pyomo/HiGHS Optimizer (MIP)\n    → Recommendations (selected interventions)\n    → MLflow Model → Serving Endpoint / Batch\n\nConstraints: budget, vendor capacity, 1 action per member-measure,\n             contact limits, eligibility suppression'));
+    root.appendChild(ac);
+    root.appendChild(h('div',{class:'warn-box'},'⚠️ This is a synthetic demonstration, NOT a validated clinical decisioning system. All data is synthetic. Do not use for actual patient care decisions.'));
+  } catch(e) { root.innerHTML='<div class="card" style="color:red">'+e.message+'</div>'; }
+}
+
+// ── Init ──
+renderNav();
+renderPage();
+</script>
+</body>
+</html>

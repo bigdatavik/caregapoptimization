@@ -1,0 +1,106 @@
+# caregapoptimization — Care-Gap Recommendation & Optimization
+#
+# Install into any workspace:
+#   databricks bundle deploy -t dev --profile <PROFILE> --var catalog=<existing_catalog>
+#   databricks bundle run caregapoptimization_e2e -t dev --profile <PROFILE> --var catalog=<existing_catalog>
+#   databricks bundle run caregapoptimization_app -t dev --profile <PROFILE>
+
+bundle:
+  name: caregapoptimization
+
+variables:
+  catalog:
+    description: Unity Catalog catalog for tables and the model (created if missing and permitted)
+    default: main
+  schema:
+    description: Schema for the 5 synthetic tables and caregapoptimization_model
+    default: caregapoptimization
+  deploy_endpoint:
+    description: "Create/update the scale-to-zero serving endpoint in notebook 09 (true/false)"
+    default: "false"
+  app_name:
+    description: Databricks App name (must be unique in the workspace)
+    default: caregapoptimization
+
+sync:
+  exclude:
+    - evidence/**
+    - "**/__pycache__/**"
+
+resources:
+  jobs:
+    caregapoptimization_e2e:
+      name: caregapoptimization_e2e
+      description: Runs notebooks 00–11 in order — data → model → optimizer → scenarios → package/register → tests.
+      max_concurrent_runs: 1
+      parameters:
+        - name: catalog
+          default: ${var.catalog}
+        - name: schema
+          default: ${var.schema}
+        - name: deploy_endpoint
+          default: ${var.deploy_endpoint}
+      tasks:
+        - task_key: nb00_project_story
+          notebook_task:
+            notebook_path: ./notebooks/00_start_here_project_story.py
+        - task_key: nb02_data_quality_and_demo_data
+          depends_on: [{task_key: nb00_project_story}]
+          notebook_task:
+            notebook_path: ./notebooks/02_data_quality_and_demo_data.py
+        - task_key: nb01_environment_and_design
+          depends_on: [{task_key: nb02_data_quality_and_demo_data}]
+          notebook_task:
+            notebook_path: ./notebooks/01_environment_and_design.py
+        - task_key: nb03_train_and_validate_baseline
+          depends_on: [{task_key: nb02_data_quality_and_demo_data}]
+          notebook_task:
+            notebook_path: ./notebooks/03_train_and_validate_baseline.py
+        - task_key: nb04_business_policies
+          depends_on: [{task_key: nb02_data_quality_and_demo_data}]
+          notebook_task:
+            notebook_path: ./notebooks/04_business_policies.py
+        - task_key: nb05_pyomo_optimizer
+          depends_on: [{task_key: nb03_train_and_validate_baseline}]
+          notebook_task:
+            notebook_path: ./notebooks/05_pyomo_optimizer.py
+        - task_key: nb06_sequencing_and_uncertainty
+          depends_on: [{task_key: nb05_pyomo_optimizer}]
+          notebook_task:
+            notebook_path: ./notebooks/06_sequencing_and_uncertainty.py
+        - task_key: nb07_batch_scenario_lab
+          depends_on: [{task_key: nb05_pyomo_optimizer}]
+          notebook_task:
+            notebook_path: ./notebooks/07_batch_scenario_lab.py
+        - task_key: nb08_package_and_test
+          depends_on:
+            - task_key: nb04_business_policies
+            - task_key: nb06_sequencing_and_uncertainty
+            - task_key: nb07_batch_scenario_lab
+          notebook_task:
+            notebook_path: ./notebooks/08_package_and_test.py
+        - task_key: nb09_register_and_serve
+          depends_on: [{task_key: nb08_package_and_test}]
+          notebook_task:
+            notebook_path: ./notebooks/09_register_and_serve.py
+        - task_key: nb10_execution_feedback_and_operations
+          depends_on: [{task_key: nb09_register_and_serve}]
+          notebook_task:
+            notebook_path: ./notebooks/10_execution_feedback_and_operations.py
+        - task_key: nb11_run_tests_and_validation_report
+          depends_on:
+            - task_key: nb01_environment_and_design
+            - task_key: nb10_execution_feedback_and_operations
+          notebook_task:
+            notebook_path: ./notebooks/11_run_tests_and_validation_report.py
+
+  apps:
+    caregapoptimization_app:
+      name: ${var.app_name}
+      description: Care-Gap Optimizer — FastAPI + static UI over the shared src/ engine
+      source_code_path: ./
+
+targets:
+  dev:
+    mode: development
+    default: true

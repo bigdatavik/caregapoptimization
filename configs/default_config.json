@@ -1,0 +1,29 @@
+{
+  "scenario_name": "default",
+  "policy_name": "balanced",
+  "config_version": "0.1.0",
+  "objective_mode": "maximize_weighted_closures",
+  "total_budget": 100000.0,
+  "uncertainty_mode": "mean",
+  "solver_time_limit_sec": 60.0,
+  "mip_gap_tolerance": 0.01,
+  "contract_priorities": [
+    {"contract_id": "H1234", "contract_name": "MA Plan Alpha", "priority_weight": 1.0},
+    {"contract_id": "H5678", "contract_name": "MA Plan Beta", "priority_weight": 1.0}
+  ],
+  "measure_priorities": [
+    {"measure_code": "HBA1C", "measure_name": "Diabetes HbA1c Control", "priority_weight": 1.0},
+    {"measure_code": "BPC", "measure_name": "Blood Pressure Control", "priority_weight": 1.0},
+    {"measure_code": "COL", "measure_name": "Colorectal Screening", "priority_weight": 1.0},
+    {"measure_code": "MED_ADH", "measure_name": "Medication Adherence", "priority_weight": 1.0}
+  ],
+  "vendor_capacities": [
+    {"vendor_id": "V001", "intervention_type": "phone_outreach", "max_capacity": 80, "capacity_unit": "members", "horizon_days": 90},
+    {"vendor_id": "V002", "intervention_type": "mail_reminder", "max_capacity": 500, "capacity_unit": "members", "horizon_days": 90},
+    {"vendor_id": "V003", "intervention_type": "nurse_visit", "max_capacity": 30, "capacity_unit": "members", "horizon_days": 90},
+    {"vendor_id": "V004", "intervention_type": "pharmacy_consult", "max_capacity": 60, "capacity_unit": "members", "horizon_days": 90}
+  ],
+  "contact_limits": [
+    {"max_contacts_per_member": 3, "cooldown_days": 30, "channel": "any"}
+  ]
+}

@@ -1,0 +1,7 @@
+command:
+  - python
+  - app.py
+
+env:
+  - name: PYTHONUNBUFFERED
+    value: "1"

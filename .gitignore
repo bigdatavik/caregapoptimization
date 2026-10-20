@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.databricks/
+.DS_Store
+
+# FE Bar prep (local only, never commit)
+fe-bar/
+
+# Local tool settings
+.isaac/
+.vscode/

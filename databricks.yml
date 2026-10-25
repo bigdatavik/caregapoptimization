@@ -1,12 +1,15 @@
 # caregapoptimization — Care-Gap Recommendation & Optimization
 #
-# Install into any workspace:
-#   databricks bundle deploy -t dev --profile <PROFILE> --var catalog=<existing_catalog>
-#   databricks bundle run caregapoptimization_e2e -t dev --profile <PROFILE> --var catalog=<existing_catalog>
-#   databricks bundle run caregapoptimization_app -t dev --profile <PROFILE>
+# Install into any workspace (see INSTALL.md):
+#   ./scripts/install.sh --host https://<workspace-url> --catalog <existing_catalog>
+# or manually:
+#   databricks bundle deploy -t dev --profile <PROFILE> --var="catalog=<existing_catalog>"
+#   databricks bundle run caregapoptimization_e2e -t dev --profile <PROFILE> --var="catalog=<existing_catalog>"
+#   databricks bundle run caregapoptimization_app -t dev --profile <PROFILE> --var="catalog=<existing_catalog>"
 
 bundle:
   name: caregapoptimization
+  databricks_cli_version: ">= 0.250.0"
 
 variables:
   catalog:
@@ -19,7 +22,10 @@ variables:
     description: "Create/update the scale-to-zero serving endpoint in notebook 09 (true/false)"
     default: "false"
   app_name:
-    description: Databricks App name (must be unique in the workspace)
+    description: Databricks App name (must be unique in the workspace; lowercase letters, numbers, hyphens)
+    default: caregapoptimization
+  endpoint_name:
+    description: Serving endpoint name used by notebook 09 when deploy_endpoint=true (unique per workspace)
     default: caregapoptimization
 
 sync:
@@ -40,6 +46,8 @@ resources:
           default: ${var.schema}
         - name: deploy_endpoint
           default: ${var.deploy_endpoint}
+        - name: endpoint_name
+          default: ${var.endpoint_name}
       tasks:
         - task_key: nb00_project_story
           notebook_task:

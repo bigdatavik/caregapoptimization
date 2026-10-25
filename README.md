@@ -39,6 +39,8 @@ Data → Baseline Prediction → Intervention Evidence → Policy/Constraints
 ```
 caregapoptimization/
 ├── databricks.yml          # Bundle: caregapoptimization_e2e job + app (install path)
+├── INSTALL.md              # Step-by-step install guide
+├── scripts/install.sh      # One-command installer
 ├── environment.yml          # Serverless environment spec (pyomo, highspy, lightgbm)
 ├── README.md
 ├── src/
@@ -81,30 +83,33 @@ caregapoptimization/
 
 ## Quick Start (Any Workspace)
 
-Everything installs with one Declarative Automation Bundle (`databricks.yml`). It needs
-Databricks CLI >= 0.250, a serverless-enabled workspace, and an existing Unity Catalog
-catalog you can create schemas in (or permission to create catalogs).
+**Full guide: [INSTALL.md](INSTALL.md)** (prerequisites, permissions, options, updating, removing, troubleshooting).
+
+One command, from a clone of this repo:
 
 ```bash
-git clone <this repo> && cd <repo>
-databricks auth login --host https://<workspace-url> --profile <PROFILE>
+./scripts/install.sh --host https://<workspace-url> --catalog <existing_catalog>
+```
 
-# 1. Deploy the job + app (pick an existing catalog)
+It logs you in if needed, checks the catalog and Databricks Apps, validates and deploys the bundle,
+runs the 12-task job (~10 min), starts the app and prints its URL. Use `--profile <PROFILE>` instead of
+`--host` if you already have a CLI profile; `--app-name` / `--schema` for a second install in the same workspace.
+
+Manual equivalent (pass the same `--var` flags to every command):
+
+```bash
 databricks bundle deploy -t dev --profile <PROFILE> --var="catalog=<catalog>"
-
-# 2. Run notebooks 00–11 end to end (~10 min on serverless)
 databricks bundle run caregapoptimization_e2e -t dev --profile <PROFILE> --var="catalog=<catalog>"
-
-# 3. Start the app
-databricks bundle run caregapoptimization_app -t dev --profile <PROFILE>
+databricks bundle run caregapoptimization_app -t dev --profile <PROFILE> --var="catalog=<catalog>"
 ```
 
 | Variable | Default | Purpose |
 |---|---|---|
 | `catalog` | `main` | Catalog for tables + model |
 | `schema` | `caregapoptimization` | Schema (created if missing) |
-| `deploy_endpoint` | `false` | `true` makes notebook 09 create/update a scale-to-zero serving endpoint |
 | `app_name` | `caregapoptimization` | App name (must be unique in the workspace) |
+| `endpoint_name` | `caregapoptimization` | Serving endpoint name used when `deploy_endpoint=true` |
+| `deploy_endpoint` | `false` | `true` makes notebook 09 create/update a scale-to-zero serving endpoint |
 
 The job (`caregapoptimization_e2e`) runs: 00 story → 02 data → {01 env check, 03 train, 04 policies}
 → 05 optimizer → {06 sequencing, 07 scenarios} → 08 package + register in UC → 09 verify

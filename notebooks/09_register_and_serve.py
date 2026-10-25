@@ -55,6 +55,8 @@ import os
 for _k, _d in (("catalog", "main"), ("schema", "caregapoptimization")):
     dbutils.widgets.text(_k, _d)
     os.environ[f"CAREGAPOPTIMIZATION_{_k.upper()}"] = dbutils.widgets.get(_k)
+dbutils.widgets.text("endpoint_name", "caregapoptimization")
+os.environ["CAREGAPOPTIMIZATION_ENDPOINT"] = dbutils.widgets.get("endpoint_name")
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
